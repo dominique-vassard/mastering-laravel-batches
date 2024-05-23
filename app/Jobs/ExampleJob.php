@@ -26,6 +26,13 @@ class ExampleJob implements ShouldQueue
      */
     public function handle(): void
     {
+        // If batch is cancelled, stop execution
+        if ($this->batch()->cancelled()) {
+            Log::info(sprintf('%s [%d] CANCELLED: Do nothing', class_basename($this), $this->number));
+            return;
+        }
+
+        sleep(5);
         Log::info(sprintf('%s [%d] RAN', class_basename($this), $this->number));
     }
 }

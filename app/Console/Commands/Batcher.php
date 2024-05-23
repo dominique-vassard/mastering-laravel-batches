@@ -16,7 +16,8 @@ class Batcher extends Command
      *
      * @var string
      */
-    protected $signature = 'batcher';
+    protected $signature = 'batcher
+                            {--cancel= : Cancel batch with the given id}';
 
     /**
      * The console command description.
@@ -30,6 +31,34 @@ class Batcher extends Command
      */
     public function handle()
     {
+        if ($this->option('cancel')) {
+            $this->cancelBatch($this->option('cancel'));
+        } else {
+            $this->runExampleBatch();
+        }
+    }
+
+    /**
+     * Cancel the batch with the given id
+     *
+     * @param string $batch_id
+     * @return void
+     */
+    private function cancelBatch(string $batch_id): void
+    {
+        // Find the batch for the given id
+        $batch = Bus::findBatch($batch_id);
+        // Cancel the batch
+        $batch->cancel();
+    }
+
+    /**
+     * Run a batch of ExampleJobs
+     *
+     * @return void
+     */
+    private function runExampleBatch(): void
+    {
         Bus::batch(
             Arr::map(
                 range(1, 5),
@@ -38,6 +67,14 @@ class Batcher extends Command
         )
             ->before(fn (Batch $batch) => Log::info(sprintf('Batch [%s] created.', $batch->id)))
             ->then(fn (Batch $batch) => Log::info(sprintf('Batch [%s] ended.', $batch->id)))
+            ->progress(fn (Batch $batch) =>
+            Log::info(sprintf(
+                'Batch [%s] progress : %d/%d [%d%%]',
+                $batch->id,
+                $batch->processedJobs(),
+                $batch->totalJobs,
+                $batch->progress()
+            )))
             ->dispatch();
     }
 }
