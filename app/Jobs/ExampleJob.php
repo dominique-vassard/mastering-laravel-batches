@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use Exception;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -32,7 +33,7 @@ class ExampleJob implements ShouldQueue
             return;
         }
 
-        sleep(5);
+        throw_if($this->number == 3, new Exception('I fail because 3.'));
         Log::info(sprintf('%s [%d] RAN', class_basename($this), $this->number));
     }
 }

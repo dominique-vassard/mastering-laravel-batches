@@ -4,10 +4,13 @@ namespace App\Console\Commands;
 
 use App\Jobs\ExampleJob;
 use Illuminate\Bus\Batch;
+use Illuminate\Bus\BatchRepository;
 use Illuminate\Console\Command;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 class Batcher extends Command
 {
@@ -66,6 +69,13 @@ class Batcher extends Command
             )
         )
             ->before(fn (Batch $batch) => Log::info(sprintf('Batch [%s] created.', $batch->id)))
+            ->catch(function (Batch $batch, Throwable $e) {
+                foreach ($batch->failedJobIds as $failedJobId) {
+                    $batch->recordSuccessfulJob($failedJobId);
+                    DB::table('job_batches')->where('id', $batch->id)->update(['failed_jobs' => 0]);
+                }
+                Log::error(sprintf('Batch [%s] failed with error [%s].', $batch->id, $e->getMessage()));
+            })
             ->then(fn (Batch $batch) => Log::info(sprintf('Batch [%s] ended.', $batch->id)))
             ->progress(fn (Batch $batch) =>
             Log::info(sprintf(
@@ -75,6 +85,12 @@ class Batcher extends Command
                 $batch->totalJobs,
                 $batch->progress()
             )))
+            ->finally(fn (Batch $batch) => Log::info(sprintf('Batch [%s] finally ended.', $batch->id)))
+            // ->finally(function (Batch $batch) {
+            //     app()->make(BatchRepository::class)->markAsFinished($batch->id);
+            //     Log::info(sprintf('Batch [%s] finally ended.', $batch->id));
+            // })
+            ->allowFailures()
             ->dispatch();
     }
 }
