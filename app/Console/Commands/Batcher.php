@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\ExampleJob;
+use App\Jobs\OtherJob;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\BatchRepository;
 use Illuminate\Console\Command;
@@ -37,7 +38,8 @@ class Batcher extends Command
         if ($this->option('cancel')) {
             $this->cancelBatch($this->option('cancel'));
         } else {
-            $this->runExampleBatch();
+            $this->dispatchBatch(ExampleJob::class);
+            $this->dispatchBatch(OtherJob::class);
         }
     }
 
@@ -60,20 +62,11 @@ class Batcher extends Command
      *
      * @return void
      */
-    private function runExampleBatch(): void
+    private function dispatchBatch(string $job_class_name): void
     {
-        Bus::batch(
-            Arr::map(
-                range(1, 5),
-                fn ($number) => new ExampleJob($number)
-            )
-        )
+        Bus::batch([new $job_class_name(1)])
             ->before(fn (Batch $batch) => Log::info(sprintf('Batch [%s] created.', $batch->id)))
             ->catch(function (Batch $batch, Throwable $e) {
-                foreach ($batch->failedJobIds as $failedJobId) {
-                    $batch->recordSuccessfulJob($failedJobId);
-                    DB::table('job_batches')->where('id', $batch->id)->update(['failed_jobs' => 0]);
-                }
                 Log::error(sprintf('Batch [%s] failed with error [%s].', $batch->id, $e->getMessage()));
             })
             ->then(fn (Batch $batch) => Log::info(sprintf('Batch [%s] ended.', $batch->id)))
@@ -86,10 +79,6 @@ class Batcher extends Command
                 $batch->progress()
             )))
             ->finally(fn (Batch $batch) => Log::info(sprintf('Batch [%s] finally ended.', $batch->id)))
-            // ->finally(function (Batch $batch) {
-            //     app()->make(BatchRepository::class)->markAsFinished($batch->id);
-            //     Log::info(sprintf('Batch [%s] finally ended.', $batch->id));
-            // })
             ->allowFailures()
             ->dispatch();
     }
