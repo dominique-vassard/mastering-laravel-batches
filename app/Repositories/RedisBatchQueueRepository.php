@@ -2,11 +2,10 @@
 
 namespace App\Repositories;
 
-use App\Contracts\BatchQueueRepositoryContract;
-use App\DataObjects\QueueData;
+use App\Contracts\BatchQueueRepository;
 use Illuminate\Support\Facades\Redis;
 
-class BatchQueueRepository implements BatchQueueRepositoryContract
+class RedisBatchQueueRepository implements BatchQueueRepository
 {
     /**
      * Create the list
@@ -17,7 +16,8 @@ class BatchQueueRepository implements BatchQueueRepositoryContract
      */
     public function create(string $key, array $data): int
     {
-        return Redis::rpush($key, ...$data);
+        $serialized_data = array_map(fn ($value) => serialize($value), $data);
+        return Redis::rpush($key, ...$serialized_data);
     }
 
     /**
@@ -34,12 +34,13 @@ class BatchQueueRepository implements BatchQueueRepositoryContract
     /**
      * Return the first item of the list
      *
-     * @param [type] $key
-     * @return string|null
+     * @param string $key
+     * @return mixed
      */
-    public function getFirstItem(string $key): ?string
+    public function getFirstItem(string $key): mixed
     {
-        return  Redis::lpop($key);
+        $serialized_item =  Redis::lpop($key);
+        return $serialized_item ? unserialize($serialized_item) : null;
     }
 
     /**

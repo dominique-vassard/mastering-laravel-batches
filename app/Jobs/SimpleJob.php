@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Events\Batch\BatchJobFailed;
 use App\Models\BatchQueue;
-use App\Repositories\BatchQueueRepository;
+use App\Repositories\RedisBatchQueueRepository;
 use Carbon\Carbon;
 use Exception;
 use Illuminate\Bus\Batchable;
@@ -33,7 +33,6 @@ class SimpleJob implements ShouldQueue
      */
     public function handle(): void
     {
-        sleep(5);
         try {
             // throw new Exception("FAILED");
 
@@ -60,7 +59,7 @@ class SimpleJob implements ShouldQueue
             }
         } finally {
             if ($this->batch() && !$this->batch()->cancelled()) {
-                $batch_queue = new BatchQueue($this->batch(), new BatchQueueRepository());
+                $batch_queue = new BatchQueue($this->batch(), new RedisBatchQueueRepository());
                 $next_item  = $batch_queue->pop();
                 if ($next_item) {
                     $this->batch()->add(new static($next_item));

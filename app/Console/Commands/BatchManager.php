@@ -8,7 +8,7 @@ use App\Events\Batch\BatchProgressed;
 use App\Events\Batch\BatchStarted;
 use App\Jobs\SimpleJob;
 use App\Models\BatchQueue;
-use App\Repositories\BatchQueueRepository;
+use App\Repositories\RedisBatchQueueRepository;
 use Illuminate\Bus\Batch;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
@@ -22,14 +22,14 @@ use function Laravel\Prompts\select;
 use function Laravel\Prompts\table;
 use function Laravel\Prompts\text;
 
-class Batcher extends Command
+class BatchManager extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'batcher';
+    protected $signature = 'batch:manage';
 
     /**
      * The console command description.
@@ -89,7 +89,7 @@ class Batcher extends Command
             ->before(function (Batch $batch) use ($data) {
                 Log::info(sprintf('Batch [%s] created.', $batch->id));
 
-                $batch_queue = new BatchQueue($batch, new BatchQueueRepository());
+                $batch_queue = new BatchQueue($batch, new RedisBatchQueueRepository());
                 $batch_queue->data = $data;
                 $batch_queue->create();
 
@@ -165,7 +165,7 @@ class Batcher extends Command
         $batch->cancel();
 
         // Clear the queue
-        $batch_queue = new BatchQueue($batch, new BatchQueueRepository());
+        $batch_queue = new BatchQueue($batch, new RedisBatchQueueRepository());
         $batch_queue->delete();
 
         event(new BatchCancelled($batch));

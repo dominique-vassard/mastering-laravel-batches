@@ -2,16 +2,16 @@
 
 namespace App\Models;
 
-use App\Contracts\BatchQueueRepositoryContract;
+use App\Contracts\BatchQueueRepository;
 use Illuminate\Bus\Batch;
 
 class BatchQueue
 {
-    protected BatchQueueRepositoryContract $repository;
+    protected BatchQueueRepository $repository;
     public string $key;
     public array $data;
 
-    public function __construct(Batch $batch, BatchQueueRepositoryContract $batch_queue_repository)
+    public function __construct(Batch $batch, BatchQueueRepository $batch_queue_repository)
     {
         $this->key = 'batch-queue-' . $batch->id;
         $this->repository = $batch_queue_repository;
@@ -24,7 +24,7 @@ class BatchQueue
      */
     public function create(): bool
     {
-        return $this->repository->create($this->key, $this->toQueueableData());
+        return $this->repository->create($this->key, $this->data);
     }
 
     /**
@@ -44,8 +44,7 @@ class BatchQueue
      */
     public function pop(): mixed
     {
-        $item = $this->repository->getFirstItem($this->key);
-        return $item ? $this->fromQueuedData($item) : null;
+        return $this->repository->getFirstItem($this->key);
     }
 
     /**
@@ -66,26 +65,5 @@ class BatchQueue
     public function isEmpty(): bool
     {
         return $this->count() > 0;
-    }
-
-    /**
-     * Modify data to fit the underlying database
-     *
-     * @return array
-     */
-    public function toQueueableData(): array
-    {
-        return array_map(fn ($value) => json_encode($value), $this->data);
-    }
-
-    /**
-     * Modify data received from the underlying database to get a workable format
-     *
-     * @param string $data
-     * @return mixed
-     */
-    public function fromQueuedData(string $data): mixed
-    {
-        return json_decode($data);
     }
 }
