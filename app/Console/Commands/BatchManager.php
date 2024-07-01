@@ -76,13 +76,13 @@ class BatchManager extends Command
 
         $nb_jobs = text('How many jobs should the batch contains?', default: 5);
 
-        if ($nb_jobs < 1) {
+        if ($nb_jobs < 2) {
             $this->error('Cannot dispatch a batch with less than 1 job.');
             $this->dispatchBatch();
         }
 
-        $data = array_map(fn ($_) => Str::random(30), range(1, $nb_jobs));
-        array_unshift($data, Str::random(30), null);
+        $data = [Str::random(30), null];
+        $data = array_merge($data, array_map(fn ($_) => Str::random(30), range(1, $nb_jobs - 2)));
         $total_jobs = count($data);
 
         $first_data = array_shift($data);
