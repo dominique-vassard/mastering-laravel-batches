@@ -82,10 +82,10 @@ class BatchManager extends Command
         }
 
         $data = array_map(fn ($_) => Str::random(30), range(1, $nb_jobs));
+        array_unshift($data, Str::random(30), null);
         $total_jobs = count($data);
 
         $first_data = array_shift($data);
-        $first_data .= '_fails';
 
         $batch = Bus::batch([new SimpleJob($first_data)])
             ->before(function (Batch $batch) use ($data) {

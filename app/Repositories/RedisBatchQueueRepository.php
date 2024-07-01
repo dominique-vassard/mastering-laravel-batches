@@ -4,6 +4,9 @@ namespace App\Repositories;
 
 use App\Contracts\BatchQueueRepository;
 use Illuminate\Support\Facades\Redis;
+use PhpOption\None;
+use PhpOption\Option;
+use PhpOption\Some;
 
 class RedisBatchQueueRepository implements BatchQueueRepository
 {
@@ -37,10 +40,14 @@ class RedisBatchQueueRepository implements BatchQueueRepository
      * @param string $key
      * @return mixed
      */
-    public function getFirstItem(string $key): mixed
+    public function getFirstItem(string $key): Option
     {
         $serialized_item =  Redis::lpop($key);
-        return $serialized_item ? unserialize($serialized_item) : null;
+        $item = None::create();
+        if ($serialized_item !== false) {
+            $item = Some::create(unserialize($serialized_item));
+        }
+        return $item;
     }
 
     /**

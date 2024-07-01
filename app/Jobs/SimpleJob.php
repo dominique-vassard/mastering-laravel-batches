@@ -23,7 +23,7 @@ class SimpleJob implements ShouldQueue
     /**
      * Create a new job instance.
      */
-    public function __construct(public string $random_string)
+    public function __construct(public ?string $random_string)
     {
         //
     }
@@ -34,9 +34,9 @@ class SimpleJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            if (strlen($this->random_string) != 30) {
-                throw new \Exception('Random string must be 30 characters long');
-            }
+            // if (strlen($this->random_string) != 30) {
+            //     throw new \Exception('Random string must be 30 characters long');
+            // }
 
             Log::info(sprintf('%s [%s] RAN', class_basename($this), $this->random_string));
         } catch (Throwable $e) {
@@ -61,8 +61,8 @@ class SimpleJob implements ShouldQueue
             if ($this->batch()) {
                 $batch_queue = new BatchQueue($this->batch(), new RedisBatchQueueRepository());
                 $next_item  = $batch_queue->pop();
-                if ($next_item) {
-                    $this->batch()->add(new static($next_item));
+                if ($next_item->isDefined()) {
+                    $this->batch()->add(new static($next_item->get()));
                 }
             }
         }
