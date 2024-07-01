@@ -2,6 +2,7 @@
 
 namespace App\Console\Commands;
 
+use App\Core\ProgressiveBatch;
 use App\Events\Batch\BatchCancelled;
 use App\Events\Batch\BatchEnded;
 use App\Events\Batch\BatchProgressed;
@@ -83,36 +84,7 @@ class BatchManager extends Command
 
         $data = [Str::random(30), null];
         $data = array_merge($data, array_map(fn ($_) => Str::random(30), range(1, $nb_jobs - 2)));
-        $total_jobs = count($data);
-
-        $first_data = array_shift($data);
-
-        $batch = Bus::batch([new SimpleJob($first_data)])
-            ->before(function (Batch $batch) use ($data) {
-                event(new BatchStarted($batch));
-
-                $batch_queue = new BatchQueue($batch, new RedisBatchQueueRepository());
-                $batch_queue->data = $data;
-                $batch_queue->create();
-            })
-            ->progress(function (Batch $batch) use ($total_jobs) {
-                $nb_processed_jobs = $batch->processedJobs() + $batch->failedJobs;
-                $previous_progress = $total_jobs > 0 ? round((($nb_processed_jobs - 1) / $total_jobs) * 100) : 0;
-                $progress =  $total_jobs > 0 ? round(($nb_processed_jobs / $total_jobs) * 100) : 0;
-
-                if (floor($previous_progress / 10) != floor($progress / 10)) {
-                    event(new BatchProgressed($batch, [
-                        'progress' => (int)(floor($progress / 10) * 10),
-                        'nb_jobs_processed' => $nb_processed_jobs,
-                        'nb_jobs_failed' => $batch->failedJobs,
-                        'nb_jobs_total' =>  $total_jobs,
-                    ]));
-                }
-            })
-            ->finally(function (Batch $batch) {
-                event(new BatchEnded($batch));
-            })
-            ->allowFailures()
+        $batch = (new ProgressiveBatch())->create(SimpleJob::class, $data)
             ->dispatch();
 
         $this->current_batch_id = $batch->id;
@@ -138,60 +110,29 @@ class BatchManager extends Command
 
     protected function cancelBatch(): void
     {
-        $batch = Bus::findBatch($this->current_batch_id);
-        $batch->cancel();
-
-        // Clear the queue
-        $batch_queue = new BatchQueue($batch, new RedisBatchQueueRepository());
-        $batch_queue->delete();
-
-        event(new BatchCancelled($batch));
+        (new ProgressiveBatch())->cancel($this->current_batch_id);
     }
 
     protected function retryBatch(): void
     {
         $batch_id = $this->getBatchId();
         if (confirm(sprintf('Are you sure to retry all failed jobs of batch [%s]?', $batch_id), false)) {
-            $this->call('queue:retry-batch', ['id' => $this->current_batch_id]);
+            (new ProgressiveBatch())->retry($this->current_batch_id);
         };
     }
 
     protected function retryJob(): void
     {
         $batch_id = $this->getBatchId();
-        $batch = Bus::findBatch($batch_id);
-        $queue_failer = app('queue.failer');
-        $failed_jobs = collect($batch->failedJobIds)
-            ->mapWithKeys(function ($failed_job_id) use ($queue_failer) {
-                // Get job data
-                $job_data = $queue_failer->find($failed_job_id);
-                $payload = json_decode($job_data->payload, true);
-                $job_class = unserialize($payload['data']['command']);
 
-                // Extract arg names from class constructor signature and their data from unserialized class
-                $args = [];
-                $job_reflection = new ReflectionClass($job_class);
-                $constructor = $job_reflection->getConstructor();
-                foreach ($constructor->getParameters() as $param) {
-                    $param_name = $param->getName();
-                    $args[$param->getName()] = $job_class->$param_name;
-                }
-
-                $job = [
-                    'uuid' => $payload['uuid'],
-                    'class' => $payload['data']['commandName'],
-                    'args' => json_encode($args, JSON_PRETTY_PRINT),
-                    'failed_at' => $job_data->failed_at,
-                ];
-
-                return [$payload['uuid'] => $job];
-            });
-
+        $progressive_batch = new ProgressiveBatch();
+        $failed_jobs = collect($progressive_batch->listFailedJobs($batch_id))
+            ->mapWithKeys(fn ($failed_job) => [$failed_job['uuid'] => $failed_job]);
 
         table(['uuid', 'class', 'args', 'failed_at'], $failed_jobs);
 
         $job_uuid_to_retry = select('Which job do you want to retry', array_column($failed_jobs->toArray(), 'uuid'));
-        $this->call('queue:retry', ['id' => $job_uuid_to_retry]);
+        $progressive_batch->retryJobs($batch_id, [$job_uuid_to_retry]);
 
         $this->info('Job pushed to queue for retry');
     }

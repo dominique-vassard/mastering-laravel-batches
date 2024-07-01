@@ -21,6 +21,11 @@ class SimpleJob extends ProgressiveBatchJob
      */
     public function run(): void
     {
+        if (strlen($this->random_string) != 30) {
+            Log::info(sprintf('%s [%s] FAILS', class_basename($this), $this->random_string));
+            throw new \Exception('Random string must be 30 characters long');
+        }
+
         Log::info(sprintf('%s [%s] RAN', class_basename($this), $this->random_string));
     }
 }

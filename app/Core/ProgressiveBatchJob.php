@@ -60,6 +60,7 @@ abstract class ProgressiveBatchJob implements ShouldQueue
             $this->run();
         } catch (Throwable $e) {
             $this->progressiveBatchFailed($e);
+            throw $e;
         } finally {
             $this->addNextJobToBatch();
         }
