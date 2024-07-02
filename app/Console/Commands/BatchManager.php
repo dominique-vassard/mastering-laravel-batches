@@ -2,12 +2,12 @@
 
 namespace App\Console\Commands;
 
-use App\Core\ProgressiveBatch;
 use App\Events\Batch\BatchCancelled;
 use App\Events\Batch\BatchEnded;
 use App\Events\Batch\BatchProgressed;
 use App\Events\Batch\BatchStarted;
 use App\Events\Batch\BatchStartedPlain;
+use App\Facades\ProgressiveBatch;
 use App\Jobs\SimpleJob;
 use App\Models\BatchQueue;
 use App\Repositories\RedisBatchQueueRepository;
@@ -84,7 +84,7 @@ class BatchManager extends Command
 
         $data = [Str::random(30), null];
         $data = array_merge($data, array_map(fn ($_) => Str::random(30), range(1, $nb_jobs - 2)));
-        $batch = (new ProgressiveBatch())->create(SimpleJob::class, $data)
+        $batch = ProgressiveBatch::create(SimpleJob::class, $data)
             ->dispatch();
 
         $this->current_batch_id = $batch->id;
@@ -110,14 +110,14 @@ class BatchManager extends Command
 
     protected function cancelBatch(): void
     {
-        (new ProgressiveBatch())->cancel($this->current_batch_id);
+        ProgressiveBatch::cancel($this->current_batch_id);
     }
 
     protected function retryBatch(): void
     {
         $batch_id = $this->getBatchId();
         if (confirm(sprintf('Are you sure to retry all failed jobs of batch [%s]?', $batch_id), false)) {
-            (new ProgressiveBatch())->retry($this->current_batch_id);
+            ProgressiveBatch::retry($this->current_batch_id);
         };
     }
 
@@ -125,14 +125,13 @@ class BatchManager extends Command
     {
         $batch_id = $this->getBatchId();
 
-        $progressive_batch = new ProgressiveBatch();
-        $failed_jobs = collect($progressive_batch->listFailedJobs($batch_id))
+        $failed_jobs = collect(ProgressiveBatch::listFailedJobs($batch_id))
             ->mapWithKeys(fn ($failed_job) => [$failed_job['uuid'] => $failed_job]);
 
         table(['uuid', 'class', 'args', 'failed_at'], $failed_jobs);
 
         $job_uuid_to_retry = select('Which job do you want to retry', array_column($failed_jobs->toArray(), 'uuid'));
-        $progressive_batch->retryJobs($batch_id, [$job_uuid_to_retry]);
+        ProgressiveBatch::retryJobs($batch_id, [$job_uuid_to_retry]);
 
         $this->info('Job pushed to queue for retry');
     }

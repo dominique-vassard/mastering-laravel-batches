@@ -98,6 +98,13 @@ class ProgressiveBatch
         Artisan::call('queue:retry-batch', ['id' => $batch->id]);
     }
 
+    /**
+     * REtry the given jobs in the batch with the given id
+     *
+     * @param string $batch_id
+     * @param array $job_ids
+     * @return void
+     */
     public function retryJobs(string $batch_id, array $job_ids): void
     {
         $batch = $this->findOrFail($batch_id);
